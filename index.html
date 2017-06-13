@@ -1,0 +1,149 @@
+<html>
+<head>
+    <style>
+        body {
+            background: black;
+            overflow: hidden;
+        }
+
+        .figure {
+            position: absolute;
+            transition-property: left, top;
+            transition-timing-function: ease-out;
+        }
+    </style>
+</head>
+<body ng-app='myApp' ng-strict-di>
+<playground playground-size></playground>
+<script src='node_modules/angular/angular.js'></script>
+<script>
+	angular.module('myApp', []).config(['$compileProvider', $compileProvider => {
+		$compileProvider.debugInfoEnabled(false);
+	}]).value('playgroundConfig', {
+		figuresCount: 500,
+		minimalDistance: 250,
+		smoothTransitionTime: 0, // set to zero to disable transition
+		color: false, // false or undefined for random color; any proper css value will do, e.g. 'white'
+		sizeMin: 21,
+		sizeMax: 21,
+		invertMultiplier: true,
+		opacityEnabled: true,
+//	}).value('playgroundConfig', {
+//		figuresCount: 300,
+//		minimalDistance: 200,
+//		smoothTransitionTime: 0.3,
+//		color: false,
+//		sizeMin: 7,
+//		sizeMax: 33,
+//		invertMultiplier: false,
+//		opacityEnabled: false,
+	}).run(['playgroundConfig', playgroundConfig => {
+        if (playgroundConfig.smoothTransitionTime) {
+	        const sheet = window.document.styleSheets[0];
+	        sheet.insertRule(`.figure { transition-duration: ${playgroundConfig.smoothTransitionTime}s; }`, sheet.cssRules.length);
+        }
+    }]).component('playground', {
+		template: `<div ng-repeat='figure in ::$ctrl.figures track by $index' class='figure' ng-style='::figure' mouse-magnet></div>`,
+		controller: ['playgroundConfig', function (playgroundConfig) {
+			const randomInt = (min, max) => Math.floor(Math.random() * (max - min)) + min;
+			const rgbColor = (r, g, b) => `rgb(${r}, ${g}, ${b})`;
+			const randomColor = () => rgbColor(randomInt(0, 255), randomInt(0, 255), randomInt(0, 255));
+			const initSquares = count => {
+				const body = document.body;
+				const bodyWidth = body.clientWidth;
+				const bodyHeight = body.clientHeight;
+				const result = [];
+				for (let i = 0; i < count; i++) {
+					const size = randomInt(playgroundConfig.sizeMin, playgroundConfig.sizeMax);
+					result.push({
+						width: size,
+						height: size,
+						borderRadius: `${size}px`,
+						backgroundColor: playgroundConfig.color || randomColor(),
+						left: randomInt(0, bodyWidth - size),
+						top: randomInt(0, bodyHeight - size),
+					});
+				}
+				return result;
+			};
+
+			this.$onInit = () => {
+				this.figures = initSquares(playgroundConfig.figuresCount);
+
+			};
+		}],
+	}).factory('globalMousemoveListener', ['$window', $window => {
+		const mouseMoveHandler = ({ x, y }) => handlers.forEach(h => h(x, y));
+		const handlers = [];
+		let listeningToMousemoveEvent = false;
+
+		return {
+			subscribe: handler => {
+				if (!listeningToMousemoveEvent) {
+					$window.addEventListener('mousemove', mouseMoveHandler);
+					listeningToMousemoveEvent = true;
+				}
+				handlers.push(handler);
+			},
+			unsubscribe: handler => {
+				handlers.splice(handlers.findIndex(h => h === handler), 1);
+
+				if (handlers.length <= 0) {
+					listeningToMousemoveEvent = false;
+					$window.removeEventListener('mousemove', mouseMoveHandler);
+				}
+			},
+		}
+	}]).directive('mouseMagnet', ['globalMousemoveListener', 'playgroundConfig', (globalMousemoveListener, playgroundConfig) => ({
+		scope: true,
+		restrict: 'A',
+		link: (scope, element) => {
+			setTimeout(() => {
+				const invertMultiplier = playgroundConfig.invertMultiplier;
+				const opacityEnabled = playgroundConfig.opacityEnabled;
+				const minimalDistance = playgroundConfig.minimalDistance;
+				const minimalDistanceSquared = minimalDistance * minimalDistance;
+
+				const elementRect = element[0].getBoundingClientRect();
+				const originalLeft = elementRect.left;
+				const originalTop = elementRect.top;
+				const centerX = originalLeft + (elementRect.width + 1) / 2;
+				const centerY = originalTop + (elementRect.height + 1) / 2;
+
+				let originalPositionChanged = false;
+				globalMousemoveListener.subscribe((x, y) => {
+					const xDiff = centerX - x;
+					const yDiff = centerY - y;
+					const distanceSquared = xDiff * xDiff + yDiff * yDiff;
+
+					if (distanceSquared <= minimalDistanceSquared) {
+						originalPositionChanged = true;
+						const multiplier = invertMultiplier ?
+                            distanceSquared / minimalDistanceSquared :
+							1 - distanceSquared / minimalDistanceSquared;
+						const newCssValue = {
+							left: originalLeft - xDiff * multiplier,
+							top: originalTop - yDiff * multiplier,
+						};
+						if (opacityEnabled) {
+							newCssValue['opacity'] = 1 - multiplier;
+						}
+						element.css(newCssValue);
+					} else if (originalPositionChanged) {
+						originalPositionChanged = false;
+						const newCssValue = {
+							left: originalLeft,
+							top: originalTop,
+						};
+						if (opacityEnabled) {
+							newCssValue['opacity'] = 1;
+						}
+						element.css(newCssValue);
+					}
+				});
+			});
+		},
+	})]);
+</script>
+</body>
+</html>
