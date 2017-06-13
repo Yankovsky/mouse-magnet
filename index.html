@@ -48,7 +48,7 @@
 			const randomInt = (min, max) => Math.floor(Math.random() * (max - min)) + min;
 			const rgbColor = (r, g, b) => `rgb(${r}, ${g}, ${b})`;
 			const randomColor = () => rgbColor(randomInt(0, 255), randomInt(0, 255), randomInt(0, 255));
-			const initSquares = count => {
+			const initFigures = count => {
 				const body = document.body;
 				const bodyWidth = body.clientWidth;
 				const bodyHeight = body.clientHeight;
@@ -68,8 +68,7 @@
 			};
 
 			this.$onInit = () => {
-				this.figures = initSquares(playgroundConfig.figuresCount);
-
+				this.figures = initFigures(playgroundConfig.figuresCount);
 			};
 		}],
 	}).factory('globalMousemoveListener', ['$window', $window => {
